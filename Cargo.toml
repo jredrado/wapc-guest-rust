@@ -12,4 +12,5 @@ keywords = ["sdk", "wapc", "webassembly", "wasm", "waxosuit"]
 categories = ["wasm", "api-bindings"]
 
 [dependencies]
-lazy_static = "1.4.0"
+lazy_static = { version="1.4.0", default-features = false, features = ["spin_no_std"]}
+spin = {version="0.9.0", default-features=false,features=["rwlock"]}

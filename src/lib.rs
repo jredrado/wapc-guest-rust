@@ -1,3 +1,8 @@
+#![feature(core_intrinsics,lang_items,start,default_alloc_error_handler,custom_test_frameworks)]
+#![no_std]
+#![no_main]
+
+
 //! # wapc-guest
 //!
 //! The `wapc-guest` library provides WebAssembly module developers with access to a
@@ -24,12 +29,20 @@
 //! }
 //! ```
 
-use lazy_static::lazy_static;
-use std::collections::HashMap;
-use std::sync::RwLock;
+extern crate alloc;
 
-pub type CallResult = std::result::Result<Vec<u8>, Box<dyn std::error::Error + Sync + Send>>;
-pub type HandlerResult<T> = std::result::Result<T, Box<dyn std::error::Error + Sync + Send>>;
+use lazy_static::lazy_static;
+
+use alloc::collections::BTreeMap as HashMap;
+use alloc::vec::Vec;
+use alloc::boxed::Box;
+use alloc::string::String;
+use alloc::format;
+
+use spin::rwlock::RwLock;
+
+pub type CallResult = core::result::Result<Vec<u8>, Box<crate::errors::Error>>;
+pub type HandlerResult<T> = core::result::Result<T, Box<crate::errors::Error>>;
 
 #[link(wasm_import_module = "wapc")]
 extern "C" {
@@ -59,12 +72,12 @@ lazy_static! {
 }
 
 pub fn register_function(name: &str, f: fn(&[u8]) -> CallResult) {
-    REGISTRY.write().unwrap().insert(name.to_string(), f);
+    REGISTRY.write().insert(String::from(name), f);
 }
 
 #[no_mangle]
 pub extern "C" fn __guest_call(op_len: i32, req_len: i32) -> i32 {
-    use std::slice;
+    use core::slice;
 
     let buf: Vec<u8> = Vec::with_capacity(req_len as _);
     let req_ptr = buf.as_ptr();
@@ -80,9 +93,9 @@ pub extern "C" fn __guest_call(op_len: i32, req_len: i32) -> i32 {
         )
     };
 
-    let opstr = ::std::str::from_utf8(op).unwrap();
+    let opstr = ::core::str::from_utf8(op).unwrap();
 
-    match REGISTRY.read().unwrap().get(opstr) {
+    match REGISTRY.read().get(opstr) {
         Some(handler) => match handler(&slice) {
             Ok(result) => {
                 unsafe {
@@ -91,7 +104,7 @@ pub extern "C" fn __guest_call(op_len: i32, req_len: i32) -> i32 {
                 1
             }
             Err(e) => {
-                let errmsg = format!("Guest call failed: {}", e);
+                let errmsg = format!("Guest call failed: {:?}", e);
                 unsafe {
                     __guest_error(errmsg.as_ptr(), errmsg.len() as _);
                 }
@@ -129,7 +142,7 @@ pub fn host_call(binding: &str, ns: &str, op: &str, msg: &[u8]) -> CallResult {
         let retptr = buf.as_ptr();
         let slice = unsafe {
             __host_error(retptr);
-            std::slice::from_raw_parts(retptr as _, errlen as _)
+            core::slice::from_raw_parts(retptr as _, errlen as _)
         };
         Err(Box::new(errors::new(errors::ErrorKind::HostError(
             String::from_utf8(slice.to_vec()).unwrap(),
@@ -141,7 +154,7 @@ pub fn host_call(binding: &str, ns: &str, op: &str, msg: &[u8]) -> CallResult {
         let retptr = buf.as_ptr();
         let slice = unsafe {
             __host_response(retptr);
-            std::slice::from_raw_parts(retptr as _, len as _)
+            core::slice::from_raw_parts(retptr as _, len as _)
         };
         Ok(slice.to_vec())
     }

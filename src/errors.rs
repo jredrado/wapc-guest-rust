@@ -16,8 +16,9 @@
 //!
 //! This module contains types and utility functions for error handling
 
-use std::error::Error as StdError;
-use std::fmt;
+
+use alloc::boxed::Box;
+use alloc::string::{String,FromUtf8Error};
 
 #[derive(Debug)]
 pub struct Error(Box<ErrorKind>);
@@ -28,8 +29,8 @@ pub fn new(kind: ErrorKind) -> Error {
 
 #[derive(Debug)]
 pub enum ErrorKind {
-    UTF8(std::string::FromUtf8Error),
-    UTF8Str(std::str::Utf8Error),
+    UTF8(FromUtf8Error),
+    UTF8Str(core::str::Utf8Error),
     HostError(String),
     BadDispatch(String),
 }
@@ -44,7 +45,7 @@ impl Error {
     }
 }
 
-impl StdError for Error {
+impl Error {
     fn description(&self) -> &str {
         match *self.0 {
             ErrorKind::UTF8(_) => "UTF8 encoding failure",
@@ -54,35 +55,27 @@ impl StdError for Error {
         }
     }
 
-    fn cause(&self) -> Option<&dyn StdError> {
+    /*
+    fn cause(&self) -> Option<Error> {
         match *self.0 {
-            ErrorKind::UTF8(ref e) => Some(e),
-            ErrorKind::UTF8Str(ref e) => Some(e),
+            ErrorKind::UTF8(ref e) => Some(Error::from(*e)),
+            ErrorKind::UTF8Str(ref e) => Some(Error::from(*e)),
             ErrorKind::HostError(_) => None,
             ErrorKind::BadDispatch(_) => None,
         }
     }
+    */
 }
 
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self.0 {
-            ErrorKind::UTF8(ref e) => write!(f, "UTF8 encoding error: {}", e),
-            ErrorKind::UTF8Str(ref e) => write!(f, "UTF8 error: {}", e),
-            ErrorKind::HostError(ref e) => write!(f, "Host error: {}", e),
-            ErrorKind::BadDispatch(ref e) => write!(f, "Bad dispatch, attempted operation: {}", e),
-        }
-    }
-}
 
-impl From<std::str::Utf8Error> for Error {
-    fn from(source: std::str::Utf8Error) -> Error {
+impl From<core::str::Utf8Error> for Error {
+    fn from(source: core::str::Utf8Error) -> Error {
         Error(Box::new(ErrorKind::UTF8Str(source)))
     }
 }
 
-impl From<std::string::FromUtf8Error> for Error {
-    fn from(source: std::string::FromUtf8Error) -> Error {
+impl From<FromUtf8Error> for Error {
+    fn from(source: FromUtf8Error) -> Error {
         Error(Box::new(ErrorKind::UTF8(source)))
     }
 }
